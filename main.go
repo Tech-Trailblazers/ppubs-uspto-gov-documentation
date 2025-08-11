@@ -150,7 +150,7 @@ func fileExists(filename string) bool {
 func downloadPDF(finalURL string, fileName string, outputDir string) {
 	filePath := filepath.Join(outputDir, fileName) // Combine with output directory
 	if fileExists(filePath) {
-		log.Printf("File already exists skipping %s URL %s", filePath, finalURL)
+		log.Printf("File already exists, skipping: %s | URL: %s", filePath, finalURL)
 		return
 	}
 	client := &http.Client{Timeout: 3 * time.Minute} // HTTP client with timeout
@@ -227,11 +227,11 @@ func printToPDFAndSave(url string, filename string, outputDir string) {
 
 	// Create Chrome execution allocator options for headless mode and other flags
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),                    // Enable headless mode (no GUI)
-		chromedp.Flag("disable-gpu", true),                 // Disable GPU usage (recommended for headless)
-		chromedp.Flag("no-sandbox", true),                  // Disable sandboxing (needed in some environments)
-		chromedp.Flag("disable-setuid-sandbox", true),      // Disable setuid sandbox
-		chromedp.Flag("disable-dev-shm-usage", true),       // Prevent /dev/shm issues in Docker
+		chromedp.Flag("headless", true),               // Enable headless mode (no GUI)
+		chromedp.Flag("disable-gpu", true),            // Disable GPU usage (recommended for headless)
+		chromedp.Flag("no-sandbox", true),             // Disable sandboxing (needed in some environments)
+		chromedp.Flag("disable-setuid-sandbox", true), // Disable setuid sandbox
+		chromedp.Flag("disable-dev-shm-usage", true),  // Prevent /dev/shm issues in Docker
 	)
 
 	// Create a new Chrome allocator context with these options
@@ -257,21 +257,20 @@ func printToPDFAndSave(url string, filename string, outputDir string) {
 
 	// Log and exit if an error occurred during PDF generation
 	if err != nil {
-		log.Println("Failed to generate PDF:", err)
+		log.Printf("Failed to generate PDF from URL %s, saving to %s: %v", url, filePath, err)
 		return
 	}
 
 	// Write the generated PDF bytes to the specified file path with read/write permissions
 	err = os.WriteFile(filePath, buf, 0644)
 	if err != nil {
-		log.Println("Failed to save PDF to file:", err)
+		log.Printf("Failed to save PDF to file %s: %v", filePath, err)
 		return
 	}
 
 	// Print confirmation message that PDF was saved successfully
-	fmt.Println("PDF saved to", filePath)
+	fmt.Printf("successfully downloaded %s → %s \n", url, filePath)
 }
-
 
 func main() {
 	// Prepare to download all PDFs
