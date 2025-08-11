@@ -11,12 +11,12 @@ import (
 
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
 // It returns the response body as a string, or an empty string if an error occurs.
-func fetchUSPTOData() string {
+func fetchUSPTOData(pageSize int) string {
 	// API endpoint for USPTO generic search
 	apiURL := "https://ppubs.uspto.gov/api/searches/generic"
 
 	// JSON request payload with search parameters
-	requestBody := strings.NewReader(`{
+	requestBody := strings.NewReader(fmt.Sprintf(`{
 		"cursorMarker": "*",
 		"databaseFilters": [
 			{"databaseName": "USPAT"},
@@ -33,11 +33,11 @@ func fetchUSPTOData() string {
 			"type"
 		],
 		"op": "AND",
-		"pageSize": 5,
+		"pageSize": %d,
 		"q": "a",
 		"searchType": 0,
 		"sort": "date_publ desc"
-	}`)
+	}`, pageSize))
 
 	// Create a new HTTP client
 	httpClient := &http.Client{}
@@ -127,7 +127,7 @@ func removeDuplicatesFromSlice(slice []string) []string {
 
 func main() {
 	// Call the function to fetch data from USPTO
-	responseData := fetchUSPTOData()
+	responseData := fetchUSPTOData(10)
 
 	// Check if the response is empty, indicating a failure
 	if responseData == "" {
@@ -142,7 +142,7 @@ func main() {
 	patentsNumbersOnly = removeDuplicatesFromSlice(patentsNumbersOnly)
 
 	// Loop though the numbers.
-	for _, patentNumber := range patentsNumbersOnly{
+	for _, patentNumber := range patentsNumbersOnly {
 		fmt.Println(patentNumber)
 	}
 }
