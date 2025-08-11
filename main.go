@@ -1,12 +1,21 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/chromedp/cdproto/page" // Provides access to the Chrome DevTools Protocol page domain
+	"github.com/chromedp/chromedp"     // Main chromedp package for browser automation
 )
 
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
@@ -125,7 +134,136 @@ func removeDuplicatesFromSlice(slice []string) []string {
 	return newReturnSlice
 }
 
+// fileExists checks whether a file exists and is not a directory
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename) // Get file info
+	if err != nil {                // If error occurs (e.g., file not found)
+		return false // Return false
+	}
+	return !info.IsDir() // Return true if it is a file, not a directory
+}
+
+// downloadPDF downloads a PDF from a URL and saves it to outputDir
+func downloadPDF(finalURL string, fileName string, outputDir string) {
+	filePath := filepath.Join(outputDir, fileName) // Combine with output directory
+	if fileExists(filePath) {
+		log.Printf("File already exists skipping %s URL %s", filePath, finalURL)
+		return
+	}
+	client := &http.Client{Timeout: 3 * time.Minute} // HTTP client with timeout
+	resp, err := client.Get(finalURL)                // Send HTTP GET
+	if err != nil {
+		log.Printf("failed to download %s %v", finalURL, err)
+		return
+	}
+	defer resp.Body.Close() // Ensure response body is closed
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("download failed for %s %s", finalURL, resp.Status)
+		return
+	}
+
+	contentType := resp.Header.Get("Content-Type") // Get content-type header
+	if !strings.Contains(contentType, "application/pdf") {
+		log.Printf("invalid content type for %s %s (expected application/pdf)", finalURL, contentType)
+		return
+	}
+
+	var buf bytes.Buffer                     // Create buffer
+	written, err := io.Copy(&buf, resp.Body) // Copy response body to buffer
+	if err != nil {
+		log.Printf("failed to read PDF data from %s %v", finalURL, err)
+		return
+	}
+	if written == 0 {
+		log.Printf("downloaded 0 bytes for %s not creating file", finalURL)
+		return
+	}
+
+	out, err := os.Create(filePath) // Create output file
+	if err != nil {
+		log.Printf("failed to create file for %s %v", finalURL, err)
+		return
+	}
+	defer out.Close() // Close file
+
+	_, err = buf.WriteTo(out) // Write buffer to file
+	if err != nil {
+		log.Printf("failed to write PDF to file for %s %v", finalURL, err)
+		return
+	}
+	fmt.Printf("successfully downloaded %d bytes %s → %s \n", written, finalURL, filePath)
+}
+
+// directoryExists checks whether a directory exists
+func directoryExists(path string) bool {
+	directory, err := os.Stat(path) // Get directory info
+	if err != nil {
+		return false // If error, directory doesn't exist
+	}
+	return directory.IsDir() // Return true if path is a directory
+}
+
+// createDirectory creates a directory with specified permissions
+func createDirectory(path string, permission os.FileMode) {
+	err := os.Mkdir(path, permission) // Attempt to create directory
+	if err != nil {
+		log.Println(err) // Log any error
+	}
+}
+
+// isUrlValid checks whether a URL is syntactically valid
+func isUrlValid(uri string) bool {
+	_, err := url.ParseRequestURI(uri) // Try to parse the URL
+	return err == nil                  // Return true if no error (i.e., valid URL)
+}
+
+// printToPDFAndSave navigates to a URL, generates a PDF, and saves it to the given directory and filename.
+// All errors are logged internally using the log package.
+func printToPDFAndSave(url string, filename string, outputDir string) {
+	// Create a new browser context using chromedp
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel() // Ensure the browser process is terminated when done
+
+	var buf []byte // Declare a byte slice to hold the PDF data
+
+	// Run chromedp tasks: navigate to the URL and generate the PDF
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(url), // Navigate to the target URL
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			// Generate the PDF with default settings (no background)
+			buf, _, err = page.PrintToPDF().WithPrintBackground(false).Do(ctx)
+			return err // Return any error encountered
+		}),
+	)
+
+	// Log and return if PDF generation fails
+	if err != nil {
+		log.Println("Failed to generate PDF:", err)
+		return
+	}
+
+	// Build the full path by joining the output directory with the filename
+	filepath := filepath.Join(outputDir, filename)
+
+	// Write the generated PDF bytes to the file with read/write permissions
+	err = os.WriteFile(filepath, buf, 0644)
+	if err != nil {
+		log.Println("Failed to save PDF to file:", err)
+		return
+	}
+
+	// Print confirmation that the file was saved successfully
+	fmt.Println("PDF saved to", filepath)
+}
+
 func main() {
+	// Prepare to download all PDFs
+	outputFolder := "PDFs/"
+	if !directoryExists(outputFolder) {
+		createDirectory(outputFolder, 0755)
+	}
 	// Call the function to fetch data from USPTO
 	responseData := fetchUSPTOData(10)
 
@@ -143,6 +281,21 @@ func main() {
 
 	// Loop though the numbers.
 	for _, patentNumber := range patentsNumbersOnly {
-		fmt.Println(patentNumber)
+		// Use the variable inside the URL string
+		pdfUrl := fmt.Sprintf("https://ppubs.uspto.gov/api/pdf/downloadPdf/%s?requestToken=eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9", patentNumber)
+		if !isUrlValid(pdfUrl) {
+			log.Println("Invalid URL")
+			continue
+		}
+		// The filename for the direct pdf.
+		pdfDirectUrlFile := patentNumber + ".pdf"
+		// Download the pdf.
+		downloadPDF(pdfUrl, pdfDirectUrlFile, outputFolder)
+		// The remote location of the HTML url.
+		htmlUrl := fmt.Sprintf(`https://ppubs.uspto.gov/api/patents/html/%s?source=US-PGPUB&requestToken=eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9`, patentNumber)
+		// The filename for the html to pdf.
+		htmlToPDFFile := patentNumber + "_html" + ".pdf"
+		// Save the html to a pdf.
+		printToPDFAndSave(htmlUrl, htmlToPDFFile, outputFolder)
 	}
 }
