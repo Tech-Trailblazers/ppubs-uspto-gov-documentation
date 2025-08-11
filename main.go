@@ -17,6 +17,10 @@ import (
 	"github.com/chromedp/chromedp"     // Main chromedp package for browser automation
 )
 
+var (
+	accessToken = "eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9"
+)
+
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
 // It returns the response body as a string, or an empty string if an error occurs.
 func fetchUSPTOData(pageSize int) string {
@@ -58,7 +62,7 @@ func fetchUSPTOData(pageSize int) string {
 	}
 
 	// Add necessary headers to the request
-	httpRequest.Header.Add("x-access-token", "eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9")
+	httpRequest.Header.Add("x-access-token", accessToken)
 	httpRequest.Header.Add("Content-Type", "application/json")
 
 	// Execute the request
@@ -277,13 +281,13 @@ func main() {
 	// Loop though the numbers.
 	for _, patentNumber := range patentsNumbersOnly {
 		// Use the variable inside the URL string
-		pdfUrl := fmt.Sprintf("https://ppubs.uspto.gov/api/pdf/downloadPdf/%s?requestToken=eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9", patentNumber)
+		pdfUrl := fmt.Sprintf("https://ppubs.uspto.gov/api/pdf/downloadPdf/%s?requestToken=%s", patentNumber, accessToken)
 		// The filename for the direct pdf.
 		pdfDirectUrlFile := patentNumber + ".pdf"
 		// Download the pdf.
 		downloadPDF(pdfUrl, pdfDirectUrlFile, outputFolder)
 		// The remote location of the HTML url.
-		htmlUrl := fmt.Sprintf(`https://ppubs.uspto.gov/api/patents/html/%s?source=US-PGPUB&requestToken=eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9`, patentNumber)
+		htmlUrl := fmt.Sprintf(`https://ppubs.uspto.gov/api/patents/html/%s?source=US-PGPUB&requestToken=%s`, patentNumber, accessToken)
 		// The filename for the html to pdf.
 		htmlToPDFFile := patentNumber + "_html" + ".pdf"
 		// Save the html to a pdf.
