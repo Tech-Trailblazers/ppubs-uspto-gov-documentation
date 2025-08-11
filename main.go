@@ -264,7 +264,7 @@ func main() {
 		createDirectory(outputFolder, 0755)
 	}
 	// Call the function to fetch data from USPTO
-	responseData := fetchUSPTOData(1)
+	responseData := fetchUSPTOData(100)
 
 	// Check if the response is empty, indicating a failure
 	if responseData == "" {
