@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	accessToken = "eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9"
+	accessToken = "eyJzdWIiOiI5NWY0OGUzYS03YTUwLTQ4Y2EtYWNhZC1iYjVlNjVhMzhlYzIiLCJ2ZXIiOiIwMzZmYmU3NC0zOGY5LTRiNjMtOGVmOS1lYjdmYWIyZTU5MDgiLCJleHAiOjB9"
 )
 
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
@@ -293,7 +293,7 @@ func main() {
 		log.Printf("%s", downloadMessege)
 		// Check if the string coitains a error value.
 		if strings.Contains(downloadMessege, "429") {
-			time.Sleep(1 * time.Minute)
+			time.Sleep(15 * time.Second)
 		}
 		// The remote location of the HTML url.
 		htmlUrl := fmt.Sprintf(`https://ppubs.uspto.gov/api/patents/html/%s?source=US-PGPUB&requestToken=%s`, patentNumber, accessToken)
@@ -304,7 +304,7 @@ func main() {
 		log.Printf("%s", printToPDFDownloadMessege)
 		// Check if the string coitains a error value.
 		if strings.Contains(downloadMessege, "ERR_CONNECTION_CLOSED") {
-			time.Sleep(1 * time.Minute)
+			time.Sleep(15 * time.Second)
 		}
 	}
 }
