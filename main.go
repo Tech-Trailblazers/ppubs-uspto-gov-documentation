@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,13 +210,6 @@ func createDirectory(path string, permission os.FileMode) {
 		log.Println(err) // Log any error
 	}
 }
-
-// isUrlValid checks whether a URL is syntactically valid
-func isUrlValid(uri string) bool {
-	_, err := url.ParseRequestURI(uri) // Try to parse the URL
-	return err == nil                  // Return true if no error (i.e., valid URL)
-}
-
 // printToPDFAndSave navigates to a URL, generates a PDF, and saves it to the given directory and filename.
 // All errors are logged internally using the log package.
 func printToPDFAndSave(url string, filename string, outputDir string) {
@@ -283,10 +275,6 @@ func main() {
 	for _, patentNumber := range patentsNumbersOnly {
 		// Use the variable inside the URL string
 		pdfUrl := fmt.Sprintf("https://ppubs.uspto.gov/api/pdf/downloadPdf/%s?requestToken=eyJzdWIiOiI1Mjc1OWIwNy02NTkwLTRkZWEtODcxYS1iNmJmMTQwYTBkZWIiLCJ2ZXIiOiIyN2I0OWJlNy04MzllLTQyZjEtYThhYi0yM2Y3Mjc2OGNkZmEiLCJleHAiOjB9", patentNumber)
-		if !isUrlValid(pdfUrl) {
-			log.Println("Invalid URL")
-			continue
-		}
 		// The filename for the direct pdf.
 		pdfDirectUrlFile := patentNumber + ".pdf"
 		// Download the pdf.
