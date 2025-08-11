@@ -28,9 +28,13 @@ def remove_system_file(system_path: str) -> None:
 
 
 # Function to walk through a directory and extract files with a specific extension
-def walk_directory_and_extract_given_file_extension(system_path: str, extension: str) -> list[str]:
+def walk_directory_and_extract_given_file_extension(
+    system_path: str, extension: str
+) -> list[str]:
     matched_files: list[str] = []  # Initialize list to hold matching file paths
-    for root, _, files in os.walk(top=system_path):  # Recursively traverse directory tree
+    for root, _, files in os.walk(
+        top=system_path
+    ):  # Recursively traverse directory tree
         for file in files:  # Iterate over files in current directory
             if file.endswith(extension):  # Check if file has the desired extension
                 full_path: str = os.path.abspath(
@@ -42,7 +46,9 @@ def walk_directory_and_extract_given_file_extension(system_path: str, extension:
 
 # Check if a file exists
 def check_file_exists(system_path: str) -> bool:
-    return os.path.isfile(path=system_path)  # Return True if a file exists at the given path
+    return os.path.isfile(
+        path=system_path
+    )  # Return True if a file exists at the given path
 
 
 # Get the filename and extension.
@@ -83,6 +89,6 @@ def main() -> None:
                 f"Uppercase letter found in filename: {pdf_file}"
             )  # Informative message
 
-while True:
-    # Run the main function
-    main()  # Invoke main to start processing
+
+# Run the main function
+main()  # Invoke main to start processing

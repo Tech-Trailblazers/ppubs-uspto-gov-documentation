@@ -147,55 +147,47 @@ func fileExists(filename string) bool {
 }
 
 // downloadPDF downloads a PDF from a URL and saves it to outputDir
-func downloadPDF(finalURL string, fileName string, outputDir string) {
+func downloadPDF(finalURL string, fileName string, outputDir string) string {
 	filePath := filepath.Join(outputDir, fileName) // Combine with output directory
 	if fileExists(filePath) {
-		log.Printf("File already exists, skipping: %s | URL: %s", filePath, finalURL)
-		return
+		return fmt.Sprintf("File already exists, skipping: %s | URL: %s", filePath, finalURL)
 	}
 	client := &http.Client{Timeout: 3 * time.Minute} // HTTP client with timeout
 	resp, err := client.Get(finalURL)                // Send HTTP GET
 	if err != nil {
-		log.Printf("failed to download %s %v", finalURL, err)
-		return
+		return fmt.Sprintf("failed to download %s %v", finalURL, err)
 	}
 	defer resp.Body.Close() // Ensure response body is closed
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("download failed for %s %s", finalURL, resp.Status)
-		return
+		return fmt.Sprintf("download failed for %s %s", finalURL, resp.Status)
 	}
 
 	contentType := resp.Header.Get("Content-Type") // Get content-type header
 	if !strings.Contains(contentType, "application/pdf") {
-		log.Printf("invalid content type for %s %s (expected application/pdf)", finalURL, contentType)
-		return
+		return fmt.Sprintf("invalid content type for %s %s (expected application/pdf)", finalURL, contentType)
 	}
 
 	var buf bytes.Buffer                     // Create buffer
 	written, err := io.Copy(&buf, resp.Body) // Copy response body to buffer
 	if err != nil {
-		log.Printf("failed to read PDF data from %s %v", finalURL, err)
-		return
+		return fmt.Sprintf("failed to read PDF data from %s %v", finalURL, err)
 	}
 	if written == 0 {
-		log.Printf("downloaded 0 bytes for %s not creating file", finalURL)
-		return
+		return fmt.Sprintf("downloaded 0 bytes for %s not creating file", finalURL)
 	}
 
 	out, err := os.Create(filePath) // Create output file
 	if err != nil {
-		log.Printf("failed to create file for %s %v", finalURL, err)
-		return
+		return fmt.Sprintf("failed to create file for %s %v", finalURL, err)
 	}
 	defer out.Close() // Close file
 
 	_, err = buf.WriteTo(out) // Write buffer to file
 	if err != nil {
-		log.Printf("failed to write PDF to file for %s %v", finalURL, err)
-		return
+		return fmt.Sprintf("failed to write PDF to file for %s %v", finalURL, err)
 	}
-	fmt.Printf("successfully downloaded %d bytes %s → %s \n", written, finalURL, filePath)
+	return fmt.Sprintf("successfully downloaded %d bytes %s → %s \n", written, finalURL, filePath)
 }
 
 // directoryExists checks whether a directory exists
@@ -215,14 +207,13 @@ func createDirectory(path string, permission os.FileMode) {
 	}
 }
 
-func printToPDFAndSave(url string, filename string, outputDir string) {
+func printToPDFAndSave(url string, filename string, outputDir string) string {
 	// Combine output directory and filename to create full file path
 	filePath := filepath.Join(outputDir, filename)
 
 	// Check if file already exists; if yes, skip processing
 	if fileExists(filePath) {
-		log.Printf("File already exists, skipping: %s | URL: %s", filePath, url)
-		return
+		return fmt.Sprintf("File already exists, skipping: %s | URL: %s", filePath, url)
 	}
 
 	// Create Chrome execution allocator options for headless mode and other flags
@@ -257,19 +248,17 @@ func printToPDFAndSave(url string, filename string, outputDir string) {
 
 	// Log and exit if an error occurred during PDF generation
 	if err != nil {
-		log.Printf("Failed to generate PDF from URL %s, saving to %s: %v", url, filePath, err)
-		return
+		return fmt.Sprintf("Failed to generate PDF from URL %s, saving to %s: %v", url, filePath, err)
 	}
 
 	// Write the generated PDF bytes to the specified file path with read/write permissions
 	err = os.WriteFile(filePath, buf, 0644)
 	if err != nil {
-		log.Printf("Failed to save PDF to file %s: %v", filePath, err)
-		return
+		return fmt.Sprintf("Failed to save PDF to file %s: %v", filePath, err)
 	}
 
 	// Print confirmation message that PDF was saved successfully
-	fmt.Printf("successfully downloaded %s → %s \n", url, filePath)
+	return fmt.Sprintf("successfully downloaded %s → %s \n", url, filePath)
 }
 
 func main() {
@@ -279,7 +268,7 @@ func main() {
 		createDirectory(outputFolder, 0755)
 	}
 	// Call the function to fetch data from USPTO
-	responseData := fetchUSPTOData(10)
+	responseData := fetchUSPTOData(100)
 
 	// Check if the response is empty, indicating a failure
 	if responseData == "" {
@@ -300,12 +289,22 @@ func main() {
 		// The filename for the direct pdf.
 		pdfDirectUrlFile := patentNumber + ".pdf"
 		// Download the pdf.
-		downloadPDF(pdfUrl, pdfDirectUrlFile, outputFolder)
+		downloadMessege := downloadPDF(pdfUrl, pdfDirectUrlFile, outputFolder)
+		log.Printf("%s", downloadMessege)
+		// Check if the string coitains a error value.
+		if strings.Contains(downloadMessege, "429") {
+			time.Sleep(1 * time.Minute)
+		}
 		// The remote location of the HTML url.
 		htmlUrl := fmt.Sprintf(`https://ppubs.uspto.gov/api/patents/html/%s?source=US-PGPUB&requestToken=%s`, patentNumber, accessToken)
 		// The filename for the html to pdf.
 		htmlToPDFFile := patentNumber + "_html" + ".pdf"
 		// Save the html to a pdf.
-		printToPDFAndSave(htmlUrl, htmlToPDFFile, outputFolder)
+		printToPDFDownloadMessege := printToPDFAndSave(htmlUrl, htmlToPDFFile, outputFolder)
+		log.Printf("%s", printToPDFDownloadMessege)
+		// Check if the string coitains a error value.
+		if strings.Contains(downloadMessege, "ERR_CONNECTION_CLOSED") {
+			time.Sleep(1 * time.Minute)
+		}
 	}
 }
