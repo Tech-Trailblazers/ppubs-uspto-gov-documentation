@@ -210,9 +210,15 @@ func createDirectory(path string, permission os.FileMode) {
 		log.Println(err) // Log any error
 	}
 }
+
 // printToPDFAndSave navigates to a URL, generates a PDF, and saves it to the given directory and filename.
 // All errors are logged internally using the log package.
 func printToPDFAndSave(url string, filename string, outputDir string) {
+	filePath := filepath.Join(outputDir, filename) // Combine with output directory
+	if fileExists(filePath) {
+		log.Printf("File already exists skipping %s URL %s", filePath, url)
+		return
+	}
 	// Create a new browser context using chromedp
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel() // Ensure the browser process is terminated when done
@@ -236,18 +242,15 @@ func printToPDFAndSave(url string, filename string, outputDir string) {
 		return
 	}
 
-	// Build the full path by joining the output directory with the filename
-	filepath := filepath.Join(outputDir, filename)
-
 	// Write the generated PDF bytes to the file with read/write permissions
-	err = os.WriteFile(filepath, buf, 0644)
+	err = os.WriteFile(filePath, buf, 0644)
 	if err != nil {
 		log.Println("Failed to save PDF to file:", err)
 		return
 	}
 
 	// Print confirmation that the file was saved successfully
-	fmt.Println("PDF saved to", filepath)
+	fmt.Println("PDF saved to", filePath)
 }
 
 func main() {
@@ -257,7 +260,7 @@ func main() {
 		createDirectory(outputFolder, 0755)
 	}
 	// Call the function to fetch data from USPTO
-	responseData := fetchUSPTOData(10)
+	responseData := fetchUSPTOData(1)
 
 	// Check if the response is empty, indicating a failure
 	if responseData == "" {
