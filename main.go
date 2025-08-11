@@ -215,47 +215,63 @@ func createDirectory(path string, permission os.FileMode) {
 	}
 }
 
-// printToPDFAndSave navigates to a URL, generates a PDF, and saves it to the given directory and filename.
-// All errors are logged internally using the log package.
 func printToPDFAndSave(url string, filename string, outputDir string) {
-	filePath := filepath.Join(outputDir, filename) // Combine with output directory
+	// Combine output directory and filename to create full file path
+	filePath := filepath.Join(outputDir, filename)
+
+	// Check if file already exists; if yes, skip processing
 	if fileExists(filePath) {
-		log.Printf("File already exists skipping %s URL %s", filePath, url)
+		log.Printf("File already exists, skipping: %s | URL: %s", filePath, url)
 		return
 	}
-	// Create a new browser context using chromedp
-	ctx, cancel := chromedp.NewContext(context.Background())
-	defer cancel() // Ensure the browser process is terminated when done
 
-	var buf []byte // Declare a byte slice to hold the PDF data
+	// Create Chrome execution allocator options for headless mode and other flags
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true),                    // Enable headless mode (no GUI)
+		chromedp.Flag("disable-gpu", true),                 // Disable GPU usage (recommended for headless)
+		chromedp.Flag("no-sandbox", true),                  // Disable sandboxing (needed in some environments)
+		chromedp.Flag("disable-setuid-sandbox", true),      // Disable setuid sandbox
+		chromedp.Flag("disable-dev-shm-usage", true),       // Prevent /dev/shm issues in Docker
+	)
 
-	// Run chromedp tasks: navigate to the URL and generate the PDF
+	// Create a new Chrome allocator context with these options
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer cancel() // Ensure allocator is cleaned up when done
+
+	// Create a new browser context from the allocator context
+	ctx, cancelCtx := chromedp.NewContext(allocCtx)
+	defer cancelCtx() // Ensure browser context is cancelled after function ends
+
+	var buf []byte // Declare a byte slice to hold PDF data
+
+	// Run chromedp tasks: navigate to URL and generate PDF
 	err := chromedp.Run(ctx,
-		chromedp.Navigate(url), // Navigate to the target URL
+		chromedp.Navigate(url), // Navigate browser to the target URL
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			// Generate PDF of the current page without background graphics
 			var err error
-			// Generate the PDF with default settings (no background)
 			buf, _, err = page.PrintToPDF().WithPrintBackground(false).Do(ctx)
-			return err // Return any error encountered
+			return err // Return any error encountered during PDF generation
 		}),
 	)
 
-	// Log and return if PDF generation fails
+	// Log and exit if an error occurred during PDF generation
 	if err != nil {
 		log.Println("Failed to generate PDF:", err)
 		return
 	}
 
-	// Write the generated PDF bytes to the file with read/write permissions
+	// Write the generated PDF bytes to the specified file path with read/write permissions
 	err = os.WriteFile(filePath, buf, 0644)
 	if err != nil {
 		log.Println("Failed to save PDF to file:", err)
 		return
 	}
 
-	// Print confirmation that the file was saved successfully
+	// Print confirmation message that PDF was saved successfully
 	fmt.Println("PDF saved to", filePath)
 }
+
 
 func main() {
 	// Prepare to download all PDFs
