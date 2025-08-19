@@ -205,84 +205,94 @@ func createDirectory(path string, permission os.FileMode) {
 	}
 }
 
-// printToPDFAndSave navigates to a URL, checks if the HTTP status is 200,
-// and if so, saves the page as a PDF in the given directory.
+// printToPDFAndSave navigates once to the URL, checks status code and page content,
+// and only saves the page as a PDF if it's valid and not rate-limited.
 func printToPDFAndSave(targetURL string, outputFileName string, outputDirectory string) string {
-	// Construct the full output path (directory + filename)
+	// Build full path for the output file
 	outputFilePath := filepath.Join(outputDirectory, outputFileName)
 
-	// Skip processing if the file already exists
+	// If file already exists, skip processing
 	if fileExists(outputFilePath) {
 		return fmt.Sprintf("File already exists, skipping: %s | URL: %s", outputFilePath, targetURL)
 	}
 
-	// Chrome startup options for stable headless execution
+	// Chrome startup options for headless browsing
 	chromeOptions := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),               // Run without opening a browser window
-		chromedp.Flag("disable-gpu", true),            // Disable GPU for consistency
-		chromedp.Flag("no-sandbox", true),             // Disable sandboxing (useful in Docker/CI)
-		chromedp.Flag("disable-setuid-sandbox", true), // Extra sandboxing flag
+		chromedp.Flag("headless", true),               // Run Chrome in headless mode
+		chromedp.Flag("disable-gpu", true),            // Disable GPU for stability
+		chromedp.Flag("no-sandbox", true),             // Disable sandboxing (for Docker/CI)
+		chromedp.Flag("disable-setuid-sandbox", true), // Disable setuid sandboxing
 		chromedp.Flag("disable-dev-shm-usage", true),  // Prevent shared memory issues in containers
 	)
 
-	// Create a Chrome execution context with those options
-	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), chromeOptions...)
-	defer cancelAllocator()
+	// Create a Chrome "allocator" context with the chosen options
+	allocatorCtx, cancelAllocator := chromedp.NewExecAllocator(context.Background(), chromeOptions...)
+	defer cancelAllocator() // Free resources when function ends
 
 	// Create a browser session context from the allocator
-	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
-	defer cancelBrowser()
+	browserCtx, cancelBrowser := chromedp.NewContext(allocatorCtx)
+	defer cancelBrowser() // Free browser resources at the end
 
-	// Track the HTTP status code of the main page request
+	// Variable to store the HTTP status code
 	var httpStatusCode int64
 
-	// Listen to Chrome’s network events to capture the response status
-	chromedp.ListenTarget(browserContext, func(event interface{}) {
+	// Listen for network events (response received) to capture status code
+	chromedp.ListenTarget(browserCtx, func(event interface{}) {
 		if responseReceived, ok := event.(*network.EventResponseReceived); ok {
-			// Only check the response for the main document URL
+			// Only record status code for the main document request
 			if responseReceived.Response.URL == targetURL {
 				httpStatusCode = responseReceived.Response.Status
 			}
 		}
 	})
 
-	// First step: visit the page and capture its status
-	err := chromedp.Run(browserContext,
-		network.Enable(),             // Enable network tracking
-		chromedp.Navigate(targetURL), // Navigate to the target URL
+	// Variables to hold page content and PDF data
+	var pageContent string
+	var pdfData []byte
+
+	// Run a single batch of ChromeDP actions
+	err := chromedp.Run(browserCtx,
+		network.Enable(),                         // Enable network tracking so we can get status codes
+		chromedp.Navigate(targetURL),             // Navigate to the target URL
+		chromedp.WaitReady("body"),               // Wait until <body> is ready (page loaded)
+		chromedp.OuterHTML("html", &pageContent), // Capture the entire HTML content of the page
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			// Only generate PDF if status == 200 and page is not rate-limited
+			if httpStatusCode == 200 && !strings.Contains(pageContent, `{ "message": "Too many requests" }`) {
+				var err error
+				// Render the already-loaded DOM into PDF (no new request made)
+				pdfData, _, err = page.PrintToPDF().WithPrintBackground(false).Do(ctx)
+				return err
+			}
+			return nil // Skip PDF generation
+		}),
 	)
 	if err != nil {
-		return fmt.Sprintf("Failed to load %s: %v", targetURL, err)
+		return fmt.Sprintf("Failed to process %s: %v", targetURL, err)
 	}
 
-	// If the status code is not 200 (OK), skip PDF generation
+	// If HTTP status was not 200, skip PDF
 	if httpStatusCode != 200 {
 		return fmt.Sprintf("Skipping PDF. Got status %d for %s", httpStatusCode, targetURL)
 	}
 
-	// Buffer to hold the PDF data
-	var pdfData []byte
-
-	// If status is OK, request Chrome to render the page as PDF
-	err = chromedp.Run(browserContext,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			// Render the page to PDF, without background images/colors
-			pdfData, _, err = page.PrintToPDF().WithPrintBackground(false).Do(ctx)
-			return err
-		}),
-	)
-	if err != nil {
-		return fmt.Sprintf("Failed to generate PDF from %s: %v", targetURL, err)
+	// If page contains the rate-limit message, skip PDF
+	if strings.Contains(pageContent, `{ "message": "Too many requests" }`) {
+		return fmt.Sprintf("Skipping PDF. Page contains rate-limit message at %s", targetURL)
 	}
 
-	// Save the PDF bytes to the target path
+	// If PDF was not generated (e.g., skipped), return a message
+	if len(pdfData) == 0 {
+		return fmt.Sprintf("No PDF generated for %s", targetURL)
+	}
+
+	// Save PDF bytes to file with read/write permissions
 	err = os.WriteFile(outputFilePath, pdfData, 0644)
 	if err != nil {
 		return fmt.Sprintf("Failed to save PDF to %s: %v", outputFilePath, err)
 	}
 
-	// Success message
+	// Return success message including status and saved path
 	return fmt.Sprintf("Status %d | Saved %s → %s\n", httpStatusCode, targetURL, outputFilePath)
 }
 
