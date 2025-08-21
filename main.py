@@ -58,13 +58,6 @@ def get_filename_and_extension(path: str) -> str:
     )  # Return just the file name (with extension) from a path
 
 
-# Function to check if a string contains an uppercase letter.
-def check_upper_case_letter(content: str) -> bool:
-    return any(
-        upperCase.isupper() for upperCase in content
-    )  # Return True if any character is uppercase
-
-
 # Main function.
 def main() -> None:
     # Walk through the directory and extract .pdf files
@@ -80,14 +73,6 @@ def main() -> None:
             print(f"Invalid PDF detected: {pdf_file}. Deleting file.")
             # Remove the invalid .pdf file.
             remove_system_file(system_path=pdf_file)  # Delete the corrupt PDF
-
-        # Check if the filename has an uppercase letter
-        if check_upper_case_letter(
-            content=get_filename_and_extension(path=pdf_file)
-        ):  # If the filename contains uppercase
-            print(
-                f"Uppercase letter found in filename: {pdf_file}"
-            )  # Informative message
 
 
 # Run the main function
