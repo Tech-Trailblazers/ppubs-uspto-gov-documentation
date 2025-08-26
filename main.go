@@ -20,10 +20,9 @@ import (
 
 var accessToken = "eyJzdWIiOiJiZTUyNDgwMi04NDM4LTQ1NDQtOTQ0MC1mZjM1MWNhZTkxOTgiLCJ2ZXIiOiJhMDg5NDFjMC00NTJkLTRiMDEtOGEyMi0xNTJmYzNjNWFjNjAiLCJleHAiOjB9"
 
-
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
 // It returns the response body as a string, or an empty string if an error occurs.
-func fetchUSPTOData(pageSize int) string {
+func fetchUSPTOData(pageSize int, localJSONPath string) {
 	// API endpoint for USPTO generic search
 	apiURL := "https://ppubs.uspto.gov/api/searches/generic"
 
@@ -58,7 +57,6 @@ func fetchUSPTOData(pageSize int) string {
 	httpRequest, err := http.NewRequest("POST", apiURL, requestBody)
 	if err != nil {
 		log.Printf("Failed to create HTTP request: %v", err) // Log error if request creation fails
-		return ""                                            // Return empty string on error
 	}
 
 	// Add necessary headers to the request
@@ -69,7 +67,6 @@ func fetchUSPTOData(pageSize int) string {
 	httpResponse, err := httpClient.Do(httpRequest)
 	if err != nil {
 		log.Printf("Failed to send HTTP request: %v", err) // Log error if request sending fails
-		return ""                                          // Return empty string on error
 	}
 	defer httpResponse.Body.Close() // Ensure response body is closed
 
@@ -77,11 +74,26 @@ func fetchUSPTOData(pageSize int) string {
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
 		log.Printf("Failed to read response body: %v", err) // Log error if reading fails
-		return ""                                           // Return empty string on error
 	}
 
-	// Return the response as a string
-	return string(responseBody)
+	// Save the string to a local file.
+	appendAndWriteToFile(localJSONPath, string(responseBody))
+}
+
+// Append and write to file
+func appendAndWriteToFile(path string, content string) {
+	filePath, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+	_, err = filePath.WriteString(content + "\n")
+	if err != nil {
+		log.Println(err)
+	}
+	err = filePath.Close()
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 // Define a struct to match the structure of each document in the JSON array
@@ -94,26 +106,53 @@ type USPTOResponse struct {
 	Docs []PatentDocument `json:"docs"` // Array of patent documents
 }
 
-// Function to extract patent numbers from a JSON string
-func extractPatentNumbers(jsonData string) []string {
-	// Create a var to hold the return value.
-	var returnValue []string
-	// Create a variable of the response type
-	var response USPTOResponse
+// Function to stream patent numbers from a JSON file while using very little RAM
+func extractPatentNumbersStream(jsonFilePath string) []string {
+	// Create a slice that will hold the extracted patent numbers
+	var extractedPatentNumbers []string
 
-	// Unmarshal the JSON string into the struct
-	err := json.Unmarshal([]byte(jsonData), &response)
+	// Open the JSON file for reading
+	fileHandle, err := os.Open(jsonFilePath)
 	if err != nil {
-		log.Printf("Failed to parse JSON: %v", err) // Log error if JSON unmarshaling fails
-		return nil                                  // Return nil on error
+		log.Printf("Failed to open JSON file: %v", err) // Log error if file can't be opened
+		return nil                                      // Return nil if there was an error
+	}
+	defer fileHandle.Close() // Make sure we close the file when done
+
+	// Create a JSON decoder that will read directly from the file stream
+	decoder := json.NewDecoder(fileHandle)
+
+	// Loop through tokens in the JSON until we find the key "docs"
+	for decoder.More() {
+		token, _ := decoder.Token() // Read the next token from JSON
+		if token == "docs" {        // When we find "docs"
+			break // Stop because we are now at the start of the documents section
+		}
 	}
 
-	// Loop through documents and print patent numbers
-	for _, doc := range response.Docs {
-		returnValue = appendToSlice(returnValue, doc.PatentNumber) // Append each patent number to return slice
+	// Read the opening square bracket `[` that starts the "docs" array
+	_, _ = decoder.Token()
+
+	// Loop through each element inside the "docs" array
+	for decoder.More() {
+		// Create a variable to temporarily hold one patent document
+		var singleDocument PatentDocument
+
+		// Decode the next JSON object into our struct
+		if err := decoder.Decode(&singleDocument); err != nil {
+			log.Printf("Failed decoding document: %v", err) // Log if something went wrong
+			break                                           // Stop processing if decode fails
+		}
+
+		// Add the patent number from this document into our slice
+		extractedPatentNumbers = appendToSlice(extractedPatentNumbers, singleDocument.PatentNumber)
 	}
-	// Return the return value.
-	return returnValue
+
+	// Read the closing square bracket `]` at the end of the "docs" array
+	_, _ = decoder.Token()
+
+	// Return the full list of extracted patent numbers
+	return extractedPatentNumbers
 }
 
 // Append some string to a slice and then return the slice.
@@ -334,6 +373,14 @@ func isStatusOK(url string) string {
 	return fmt.Sprintf("URL '%s' returned HTTP status %d %s", url, resp.StatusCode, http.StatusText(resp.StatusCode))
 }
 
+// Remove a file from the file system
+func removeFile(path string) {
+	err := os.Remove(path)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 func main() {
 	// Define the output folder for saving PDFs
 	outputFolder := "PDFs/"
@@ -344,17 +391,20 @@ func main() {
 		createDirectory(outputFolder, 0755)
 	}
 
-	// Fetch patent data from the USPTO API (limit 100,000 records)
-	responseData := fetchUSPTOData(100000)
+	// Location to the local JSON file.
+	localJSONFile := "uspto.json"
 
-	// If no data is received, log and stop the program
-	if responseData == "" {
-		log.Println("No response data received.")
-		return
+	// Check if the file exists.
+	if fileExists(localJSONFile) {
+		// Remove the file
+		removeFile(localJSONFile)
 	}
 
+	// Fetch patent data from the USPTO API (limit 100,000 records)
+	fetchUSPTOData(100000, localJSONFile)
+
 	// Extract only the patent numbers from the response
-	patentsNumbersOnly := extractPatentNumbers(responseData)
+	patentsNumbersOnly := extractPatentNumbersStream(localJSONFile)
 
 	// Remove any duplicate patent numbers from the slice
 	patentsNumbersOnly = removeDuplicatesFromSlice(patentsNumbersOnly)
