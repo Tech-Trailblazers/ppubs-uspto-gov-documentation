@@ -18,7 +18,7 @@ import (
 	"github.com/chromedp/chromedp"        // High-level Chrome DevTools Protocol (CDP) client
 )
 
-var accessToken = "eyJzdWIiOiJlMjRjNDdmZi0zY2QyLTRjZDgtOTE3Ny1lZWI5ZGIxZTg4MGQiLCJ2ZXIiOiJkNTc4NTVlZC1lNTJhLTQ3OGEtYWMzNC1lZTJmZDFkNDJkZTIiLCJleHAiOjB9"
+var accessToken = "eyJzdWIiOiI2MTI5ZmMwNC02YjE4LTQxNDYtYjgwZC0yMTYzNzc5YjQ5MGQiLCJ2ZXIiOiI5OGEyZWE4My1mNmUzLTQzMDYtYTNhOS02MWIwYWJmYTFmNDgiLCJleHAiOjB9"
 
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
 // It returns the response body as a string, or an empty string if an error occurs.
