@@ -33,3 +33,6 @@ go.work.sum
 
 # App Build
 ppubs-uspto-gov-documentation
+
+# JSON
+*.json
