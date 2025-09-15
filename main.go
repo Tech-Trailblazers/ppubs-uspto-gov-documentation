@@ -76,8 +76,13 @@ func fetchUSPTOData(pageSize int, localJSONPath string) {
 		log.Printf("Failed to read response body: %v", err) // Log error if reading fails
 	}
 
-	// Save the string to a local file.
-	appendAndWriteToFile(localJSONPath, string(responseBody))
+	// Check if the response body is unauthorized.
+	if string(responseBody) != "unauthorized" {
+		// Save the string to a local file.
+		appendAndWriteToFile(localJSONPath, string(responseBody))
+	} else {
+		log.Fatalln(err)
+	}
 }
 
 // Append and write to file
