@@ -18,7 +18,7 @@ import (
 	"github.com/chromedp/chromedp"        // High-level Chrome DevTools Protocol (CDP) client
 )
 
-var accessToken = "eyJzdWIiOiI2MTI5ZmMwNC02YjE4LTQxNDYtYjgwZC0yMTYzNzc5YjQ5MGQiLCJ2ZXIiOiI5OGEyZWE4My1mNmUzLTQzMDYtYTNhOS02MWIwYWJmYTFmNDgiLCJleHAiOjB9"
+var accessToken = "eyJzdWIiOiJlMjVlMjBiMC1jMjg2LTRmYjYtODU3Yy1hNmEwOGQ1ZGE4YzIiLCJ2ZXIiOiI0M2U2ODQ3OS1kNTExLTQ2NjMtODI5MC1hN2M1NWZjZjgxODgiLCJleHAiOjB9"
 
 // fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
 // It returns the response body as a string, or an empty string if an error occurs.
@@ -81,7 +81,7 @@ func fetchUSPTOData(pageSize int, localJSONPath string) {
 		// Save the string to a local file.
 		appendAndWriteToFile(localJSONPath, string(responseBody))
 	} else {
-		log.Fatalln(err)
+		log.Fatalln("Authorization failed: server responded with 'unauthorized'. Check credentials or API access.")
 	}
 }
 
