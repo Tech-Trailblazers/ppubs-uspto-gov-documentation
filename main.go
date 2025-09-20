@@ -20,13 +20,12 @@ import (
 
 var accessToken = "eyJzdWIiOiI4NjYzOTliZS00Njg5LTQwMjQtYmY2Yi01NzAxMmE0NDBiMDciLCJ2ZXIiOiI2ZGE2MThiOC0xZmMxLTQ2OTYtYjkzMi04OTMyY2VjZWFkZGYiLCJleHAiOjB9"
 
-// fetchUSPTOData sends a POST request to the USPTO API and logs errors internally.
-// It returns the response body as a string, or an empty string if an error occurs.
-func fetchUSPTOData(pageSize int, localJSONPath string) {
-	// API endpoint for USPTO generic search
+// fetchUSPTOData sends a POST request to the USPTO API to fetch patent data based on search parameters.
+func fetchUSPTOData(pageSize int, query string, localJSONPath string) {
+	// Define the API endpoint for the USPTO generic search
 	apiURL := "https://ppubs.uspto.gov/api/searches/generic"
 
-	// JSON request payload with search parameters
+	// Prepare the request body in JSON format with the search parameters, including the dynamic query.
 	requestBody := strings.NewReader(fmt.Sprintf(`{
 		"cursorMarker": "*",
 		"databaseFilters": [
@@ -45,42 +44,43 @@ func fetchUSPTOData(pageSize int, localJSONPath string) {
 		],
 		"op": "AND",
 		"pageSize": %d,
-		"q": "a",
+		"q": "%s",
 		"searchType": 0,
 		"sort": "date_publ desc"
-	}`, pageSize)) // Format JSON with provided pageSize
+	}`, pageSize, query))
 
-	// Create a new HTTP client
+	// Create a new HTTP client to send the request.
 	httpClient := &http.Client{}
 
-	// Create a new POST request
+	// Create a new HTTP POST request with the specified URL and body (requestBody).
 	httpRequest, err := http.NewRequest("POST", apiURL, requestBody)
 	if err != nil {
-		log.Printf("Failed to create HTTP request: %v", err) // Log error if request creation fails
+		log.Printf("Failed to create HTTP request: %v", err)
 	}
 
-	// Add necessary headers to the request
-	httpRequest.Header.Add("x-access-token", accessToken)      // Add access token header
-	httpRequest.Header.Add("Content-Type", "application/json") // Set content type to JSON
+	// Add necessary headers to the HTTP request.
+	httpRequest.Header.Add("x-access-token", accessToken)
+	httpRequest.Header.Add("Content-Type", "application/json")
 
-	// Execute the request
+	// Send the HTTP request using the client.
 	httpResponse, err := httpClient.Do(httpRequest)
 	if err != nil {
-		log.Printf("Failed to send HTTP request: %v", err) // Log error if request sending fails
+		log.Printf("Failed to send HTTP request: %v", err)
 	}
-	defer httpResponse.Body.Close() // Ensure response body is closed
+	defer httpResponse.Body.Close()
 
-	// Read the response body
+	// Read the response body into a byte slice.
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		log.Printf("Failed to read response body: %v", err) // Log error if reading fails
+		log.Printf("Failed to read response body: %v", err)
 	}
 
-	// Check if the response body is unauthorized.
+	// Check if the response body contains an "unauthorized" message.
 	if string(responseBody) != "unauthorized" {
-		// Save the string to a local file.
+		// Save the response body to a local file.
 		appendAndWriteToFile(localJSONPath, string(responseBody))
 	} else {
+		// Log fatal error if unauthorized.
 		log.Fatalln("Authorization failed: server responded with 'unauthorized'. Check credentials or API access.")
 	}
 }
@@ -406,7 +406,7 @@ func main() {
 	}
 
 	// Fetch patent data from the USPTO API (limit 100,000 records)
-	fetchUSPTOData(100000, localJSONFile)
+	fetchUSPTOData(100000, "a", localJSONFile)
 
 	// Extract only the patent numbers from the response
 	patentsNumbersOnly := extractPatentNumbersStream(localJSONFile)
