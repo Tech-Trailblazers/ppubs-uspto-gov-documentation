@@ -437,7 +437,7 @@ func main() {
 			// If the message contains a 429 error (rate limit), pause execution for 1 minute
 			if strings.Contains(downloadMessage, "429") {
 				log.Println("Temporarily suspending activity for 1 minute; PDF")
-				time.Sleep(1 * time.Minute)
+				time.Sleep(30 * time.Second)
 			}
 		}
 
@@ -469,12 +469,12 @@ func main() {
 				// If there was a connection issue, pause for 1 minute
 				if strings.Contains(printMessage, "ERR_CONNECTION_CLOSED") {
 					log.Println("Temporarily suspending activity for 1 minute; US-PGPUB")
-					time.Sleep(1 * time.Minute)
+					time.Sleep(30 * time.Second)
 				}
 			} else if strings.Contains(status1, "429") {
 				// If too many requests (429), pause for 1 minute
 				log.Println("Temporarily suspending activity for 1 minute; US-PGPUB")
-				time.Sleep(1 * time.Minute)
+				time.Sleep(30 * time.Second)
 			}
 		}
 
